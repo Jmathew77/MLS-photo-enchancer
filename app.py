@@ -4,6 +4,11 @@ import io, zipfile
 from datetime import datetime
 
 # -------------------------------
+# Page Config
+# -------------------------------
+st.set_page_config(page_title="MLS Photo Enhancer", page_icon="📸", layout="wide")
+
+# -------------------------------
 # Image Enhancement Function
 # -------------------------------
 def enhance_image(img, max_size=2048):
@@ -34,9 +39,9 @@ def is_mobile():
 # Subscription Plans
 # -------------------------------
 tiers = {
-    "Free": {"credits": 10},          # Free plan: 10 edits/month
-    "Level 1": {"credits": 100},      # Level 1: 100 edits/month
-    "Level 2": {"credits": float("inf")},  # Level 2: Unlimited edits
+    "Free": {"credits": 10},
+    "Level 1": {"credits": 100},
+    "Level 2": {"credits": float("inf")},
 }
 
 # -------------------------------
@@ -56,73 +61,132 @@ if current_month != st.session_state.last_reset:
     st.session_state.last_reset = current_month
 
 # -------------------------------
-# App UI
+# Header
 # -------------------------------
-st.title("📸 MLS Photo Enhancer")
-
-# Show plan + credits
-plan = st.session_state.plan
-max_credits = tiers[plan]["credits"]
-used = st.session_state.credits_used
-remaining = max_credits - used if max_credits != float("inf") else "∞"
-
-st.info(f"Plan: **{plan}** | Used: {used} | Remaining: {remaining} | Resets monthly")
-
-# File uploader
-uploaded_files = st.file_uploader(
-    "Upload your photos", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+st.markdown(
+    """
+    <h1 style='text-align: center; color: #2563eb;'>📸 MLS Photo Enhancer</h1>
+    <p style='text-align: center; font-size:18px; color: gray;'>
+    Turn your phone photos into MLS-ready listings in seconds
+    </p>
+    <hr>
+    """,
+    unsafe_allow_html=True
 )
 
 # -------------------------------
-# Process Uploaded Files
+# Layout
 # -------------------------------
-if uploaded_files:
-    if max_credits != float("inf") and used + len(uploaded_files) > max_credits:
-        st.error("❌ Not enough credits! Please upgrade your plan.")
-    else:
-        output_images = []
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w") as zipf:
-            for i, file in enumerate(uploaded_files, start=1):
-                img = Image.open(file)
-                enhanced = enhance_image(img)
+col1, col2 = st.columns([2, 1])
 
-                buf = io.BytesIO()
-                enhanced.save(buf, format="JPEG", quality=90)
-                img_bytes = buf.getvalue()
+with col1:
+    # File uploader
+    uploaded_files = st.file_uploader(
+        "Upload your photos", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+    )
 
-                # Add to ZIP
-                zipf.writestr(f"{i:02}.jpg", img_bytes)
+    # Process Uploaded Files
+    if uploaded_files:
+        plan = st.session_state.plan
+        max_credits = tiers[plan]["credits"]
+        used = st.session_state.credits_used
 
-                # Store for individual downloads
-                output_images.append((i, img_bytes))
+        if max_credits != float("inf") and used + len(uploaded_files) > max_credits:
+            st.error("❌ Not enough credits! Please upgrade your plan.")
+        else:
+            output_images = []
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zipf:
+                for i, file in enumerate(uploaded_files, start=1):
+                    img = Image.open(file)
+                    enhanced = enhance_image(img)
 
-        st.success("✅ Photos enhanced successfully!")
+                    buf = io.BytesIO()
+                    enhanced.save(buf, format="JPEG", quality=90)
+                    img_bytes = buf.getvalue()
 
-        # Auto-detect + manual override
-        default_mode = "Individual Photos" if is_mobile() else "ZIP"
-        download_mode = st.radio(
-            "Choose download option:",
-            ["ZIP", "Individual Photos"],
-            index=0 if default_mode == "ZIP" else 1
-        )
+                    # Add to ZIP
+                    zipf.writestr(f"{i:02}.jpg", img_bytes)
 
-        if download_mode == "Individual Photos":
-            st.subheader("📱 Download Individual Photos")
-            for i, img_bytes in output_images:
-                st.download
+                    # Store for individual downloads + preview
+                    output_images.append((i, img_bytes))
+
+            st.success("✅ Photos enhanced successfully!")
+
+            # Show previews
+            st.subheader("🔍 Preview Enhanced Photos")
+            preview_cols = st.columns(3)
+            for i, (num, img_bytes) in enumerate(output_images):
+                with preview_cols[i % 3]:
+                    st.image(img_bytes, caption=f"Photo {num}", use_column_width=True)
+
+            # Auto-detect + manual override
+            default_mode = "Individual Photos" if is_mobile() else "ZIP"
+            download_mode = st.radio(
+                "Choose download option:",
+                ["ZIP", "Individual Photos"],
+                index=0 if default_mode == "ZIP" else 1
+            )
+
+            if download_mode == "Individual Photos":
+                st.subheader("📱 Download Individual Photos")
+                for i, img_bytes in output_images:
+                    st.download_button(
+                        label=f"Download Photo {i}",
+                        data=img_bytes,
+                        file_name=f"{i:02}.jpg",
+                        mime="image/jpeg",
+                    )
+            else:
+                st.download_button(
+                    label="📦 Download All (MLS_Photos.zip)",
+                    data=zip_buffer.getvalue(),
+                    file_name="MLS_Photos.zip",
+                    mime="application/zip",
+                )
+
+            # Deduct credits
+            st.session_state.credits_used += len(uploaded_files)
+
+with col2:
+    # Show plan + credits in styled card
+    plan = st.session_state.plan
+    max_credits = tiers[plan]["credits"]
+    used = st.session_state.credits_used
+    remaining = max_credits - used if max_credits != float("inf") else "∞"
+
+    st.markdown(
+        f"""
+        <div style='padding:20px; border-radius:12px; background:#f0f4ff; margin-bottom:20px;'>
+            <h3 style='margin:0; color:#2563eb;'>Your Plan: {plan}</h3>
+            <p style='margin:0; font-size:16px;'>Used: {used} | Remaining: {remaining}</p>
+            <p style='margin:0; font-size:14px; color:gray;'>Credits reset monthly</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Upgrade section
+    st.markdown("### 🔑 Upgrade Plan")
+    if st.button("🚀 Level 1 – 100 edits/month ($19)"):
+        st.session_state.plan = "Level 1"
+        st.session_state.credits_used = 0
+        st.success("✅ Upgraded to Level 1")
+
+    if st.button("🏆 Level 2 – Unlimited edits ($49)"):
+        st.session_state.plan = "Level 2"
+        st.session_state.credits_used = 0
+        st.success("✅ Upgraded to Level 2")
+
 # -------------------------------
-# Upgrade Section
+# Footer
 # -------------------------------
-st.subheader("Upgrade Plan")
-
-if st.button("Upgrade to Level 1 (100 edits/month)"):
-    st.session_state.plan = "Level 1"
-    st.session_state.credits_used = 0
-    st.success("✅ Upgraded to Level 1 (100 edits/month)")
-
-if st.button("Upgrade to Level 2 (Unlimited edits)"):
-    st.session_state.plan = "Level 2"
-    st.session_state.credits_used = 0
-    st.success("✅ Upgraded to Level 2 (Unlimited edits)")
-
+st.markdown(
+    """
+    <hr>
+    <p style='text-align: center; color: gray; font-size:14px;'>
+    © 2025 MLS Photo Enhancer • <a href='#'>Support</a> • <a href='#'>Terms</a>
+    </p>
+    """,
+    unsafe_allow_html=True
+)
