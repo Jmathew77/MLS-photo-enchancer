@@ -1,3 +1,4 @@
+from datetime import datetime
 import streamlit as st
 from enhance import enhance_image
 import io, zipfile
@@ -5,17 +6,23 @@ from PIL import Image
 
 # Simulated "user database" for demo
 tiers = {
-    "Free": {"credits": 5},
-    "Level 1": {"credits": 50},
-    "Level 2": {"credits": 100},
-    "Level 3": {"credits": float("inf")},
+    "Free": {"credits": 10},          # Free plan: 10 edits/month
+    "Level 1": {"credits": 100},      # Level 1: 100 edits/month
+    "Level 2": {"credits": float("inf")},  # Level 2: Unlimited edits
 }
+
 
 # Simulated login
 if "plan" not in st.session_state:
     st.session_state.plan = "Free"
 if "credits_used" not in st.session_state:
     st.session_state.credits_used = 0
+    
+# Initialize reset tracking
+if "last_reset" not in st.session_state:
+    st.session_state.last_reset = datetime.now().strftime("%Y-%m")
+
+
 
 st.title("📸 MLS Photo Enhancer")
 
@@ -26,6 +33,13 @@ used = st.session_state.credits_used
 remaining = max_credits - used if max_credits != float("inf") else "∞"
 
 st.info(f"Plan: **{plan}** | Used: {used} | Remaining: {remaining}")
+
+# Reset credits if a new month has started
+current_month = datetime.now().strftime("%Y-%m")
+if current_month != st.session_state.last_reset:
+    st.session_state.credits_used = 0
+    st.session_state.last_reset = current_month
+
 
 # File uploader
 uploaded_files = st.file_uploader(
@@ -60,12 +74,11 @@ if uploaded_files:
 
 # Upgrade section
 st.subheader("Upgrade Plan")
-if st.button("Upgrade to Level 1 (50 edits/month)"):
+if st.button("Upgrade to Level 1 (100 edits/month)"):
     st.session_state.plan = "Level 1"
     st.session_state.credits_used = 0
-if st.button("Upgrade to Level 2 (100 edits/month)"):
+if st.button("Upgrade to Level 2 (Unlimited edits)"):
     st.session_state.plan = "Level 2"
     st.session_state.credits_used = 0
-if st.button("Upgrade to Level 3 (Unlimited)"):
-    st.session_state.plan = "Level 3"
-    st.session_state.credits_used = 0
+
+
