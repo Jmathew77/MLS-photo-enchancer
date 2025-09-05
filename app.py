@@ -111,3 +111,18 @@ if uploaded_files:
             st.subheader("📱 Download Individual Photos")
             for i, img_bytes in output_images:
                 st.download
+# -------------------------------
+# Upgrade Section
+# -------------------------------
+st.subheader("Upgrade Plan")
+
+if st.button("Upgrade to Level 1 (100 edits/month)"):
+    st.session_state.plan = "Level 1"
+    st.session_state.credits_used = 0
+    st.success("✅ Upgraded to Level 1 (100 edits/month)")
+
+if st.button("Upgrade to Level 2 (Unlimited edits)"):
+    st.session_state.plan = "Level 2"
+    st.session_state.credits_used = 0
+    st.success("✅ Upgraded to Level 2 (Unlimited edits)")
+
