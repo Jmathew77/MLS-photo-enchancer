@@ -56,21 +56,41 @@ if uploaded_files:
             for i, file in enumerate(uploaded_files, start=1):
                 img = Image.open(file)
                 enhanced = enhance_image(img)
+
+                # Save each image into buffer for both ZIP and single download
                 buf = io.BytesIO()
                 enhanced.save(buf, format="JPEG", quality=90)
-                zipf.writestr(f"{i:02}.jpg", buf.getvalue())
-                output_images.append(enhanced)
+                img_bytes = buf.getvalue()
+
+                # Add to ZIP
+                zipf.writestr(f"{i:02}.jpg", img_bytes)
+
+                # Add to list for single download buttons
+                output_images.append((i, img_bytes))
 
         st.success("✅ Photos enhanced successfully!")
+
+        # Option 1: ZIP Download
         st.download_button(
-            label="Download MLS_Photos.zip",
+            label="📦 Download All (MLS_Photos.zip)",
             data=zip_buffer.getvalue(),
             file_name="MLS_Photos.zip",
             mime="application/zip",
         )
 
+        # Option 2: Individual Downloads
+        st.subheader("📱 Download Individual Photos")
+        for i, img_bytes in output_images:
+            st.download_button(
+                label=f"Download Photo {i}",
+                data=img_bytes,
+                file_name=f"{i:02}.jpg",
+                mime="image/jpeg",
+            )
+
         # Deduct credits
         st.session_state.credits_used += len(uploaded_files)
+
 
 # Upgrade section
 st.subheader("Upgrade Plan")
@@ -80,5 +100,6 @@ if st.button("Upgrade to Level 1 (100 edits/month)"):
 if st.button("Upgrade to Level 2 (Unlimited edits)"):
     st.session_state.plan = "Level 2"
     st.session_state.credits_used = 0
+
 
 
