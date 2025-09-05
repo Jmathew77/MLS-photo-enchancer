@@ -114,11 +114,11 @@ with col1:
             st.success("✅ Photos enhanced successfully!")
 
             # Show previews
-            st.subheader("🔍 Preview Enhanced Photos")
-            preview_cols = st.columns(3)
-            for i, (num, img_bytes) in enumerate(output_images):
-                with preview_cols[i % 3]:
-                    st.image(img_bytes, caption=f"Photo {num}", use_column_width=True)
+          #  st.subheader("🔍 Preview Enhanced Photos")
+          #  preview_cols = st.columns(3)
+          #  for i, (num, img_bytes) in enumerate(output_images):
+          #      with preview_cols[i % 3]:
+          #          st.image(img_bytes, caption=f"Photo {num}", use_column_width=True)
 
             # Auto-detect + manual override
             default_mode = "Individual Photos" if is_mobile() else "ZIP"
@@ -190,3 +190,4 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
