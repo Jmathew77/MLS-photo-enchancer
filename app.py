@@ -28,7 +28,8 @@ def is_mobile():
     try:
         user_agent = st.session_state.get("_user_agent", "")
         if not user_agent:
-            user_agent = st.experimental_get_query_params().get("ua", [""])[0]
+            # Use new API instead of deprecated one
+            user_agent = st.query_params.get("ua", [""])[0]
             st.session_state["_user_agent"] = user_agent.lower()
         ua = st.session_state["_user_agent"]
         return any(mobile_kw in ua for mobile_kw in ["iphone", "android", "ipad", "mobile"])
@@ -108,17 +109,10 @@ with col1:
                     # Add to ZIP
                     zipf.writestr(f"{i:02}.jpg", img_bytes)
 
-                    # Store for individual downloads + preview
+                    # Store for individual downloads
                     output_images.append((i, img_bytes))
 
             st.success("✅ Photos enhanced successfully!")
-
-            # Show previews
-          #  st.subheader("🔍 Preview Enhanced Photos")
-          #  preview_cols = st.columns(3)
-          #  for i, (num, img_bytes) in enumerate(output_images):
-          #      with preview_cols[i % 3]:
-          #          st.image(img_bytes, caption=f"Photo {num}", use_column_width=True)
 
             # Auto-detect + manual override
             default_mode = "Individual Photos" if is_mobile() else "ZIP"
@@ -190,4 +184,3 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
