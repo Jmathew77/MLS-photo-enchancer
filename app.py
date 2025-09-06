@@ -2,7 +2,7 @@ import streamlit as st
 from PIL import Image, ImageEnhance, ImageOps
 import io, zipfile
 from datetime import datetime
-from streamlit_image_comparison import image_comparison  # 👈 new import
+from streamlit_image_comparison import image_comparison  # 👈 Before/After slider
 
 # -------------------------------
 # Page Config
@@ -37,6 +37,7 @@ def enhance_image(img, style="safe", max_size=2048):
 # -------------------------------
 def is_mobile():
     try:
+        # Simple user agent detection fallback
         user_agent = st.session_state.get("_user_agent", "")
         if not user_agent:
             user_agent = st.query_params.get("ua", [""])[0]
@@ -111,6 +112,13 @@ with col1:
     )
     style_key = "safe" if style.startswith("Safe") else "pro"
 
+    # Manual override for download mode
+    override_mode = st.radio(
+        "Download Mode:",
+        ["Auto Detect", "Force ZIP (Desktop)", "Force Individual (Mobile)"],
+        index=0
+    )
+
     # Process Uploaded Files
     if uploaded_files:
         plan = st.session_state.plan
@@ -163,8 +171,16 @@ with col1:
                 label2="After"
             )
 
-            # Auto-detect device and show appropriate download option
-            if is_mobile():
+            # Decide download mode
+            if override_mode == "Force ZIP (Desktop)":
+                mobile_mode = False
+            elif override_mode == "Force Individual (Mobile)":
+                mobile_mode = True
+            else:
+                mobile_mode = is_mobile()
+
+            # Downloads
+            if mobile_mode:
                 st.subheader("📱 Download Individual Photos")
                 for i, img_bytes, _, _ in output_images:
                     st.download_button(
@@ -173,7 +189,6 @@ with col1:
                         file_name=f"{i:02}.jpg",
                         mime="image/jpeg",
                     )
-                # Mobile hint
                 st.markdown(
                     "<p style='color:gray; font-size:14px;'>💡 Tip: Tap a photo button above and then select <b>Save to Camera Roll</b> on your phone.</p>",
                     unsafe_allow_html=True
@@ -185,7 +200,6 @@ with col1:
                     file_name="MLS_Photos.zip",
                     mime="application/zip",
                 )
-                # Desktop hint
                 st.markdown(
                     "<p style='color:gray; font-size:14px;'>💡 Tip: Works best on desktop for downloading large batches of photos as a single ZIP file.</p>",
                     unsafe_allow_html=True
