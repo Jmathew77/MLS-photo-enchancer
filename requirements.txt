@@ -1,3 +1,5 @@
 streamlit
 pillow
+opencv-python
+numpy
 streamlit-image-comparison
