@@ -2,7 +2,9 @@ import streamlit as st
 from PIL import Image, ImageEnhance, ImageOps
 import io, zipfile
 from datetime import datetime
-from streamlit_image_comparison import image_comparison  # 👈 Before/After slider
+import cv2
+import numpy as np
+from streamlit_image_comparison import image_comparison  # Before/After slider
 
 # -------------------------------
 # Page Config
@@ -10,34 +12,54 @@ from streamlit_image_comparison import image_comparison  # 👈 Before/After sli
 st.set_page_config(page_title="MLS Photo Enhancer", page_icon="📸", layout="wide")
 
 # -------------------------------
-# Image Enhancement Function
+# Pillow Enhancement Function (Safe)
 # -------------------------------
-def enhance_image(img, style="safe", max_size=2048):
+def enhance_image_pillow(img, max_size=2048):
     img = img.convert("RGB")
     img = ImageOps.autocontrast(img, cutoff=1)
-
-    if style == "safe":
-        # Light touch
-        img = ImageEnhance.Color(img).enhance(1.1)
-        img = ImageEnhance.Contrast(img).enhance(1.1)
-        img = ImageEnhance.Brightness(img).enhance(1.05)
-        img = ImageEnhance.Sharpness(img).enhance(1.05)
-    else:
-        # Pro MLS: brighter, punchier
-        img = ImageEnhance.Color(img).enhance(1.15)
-        img = ImageEnhance.Contrast(img).enhance(1.15)
-        img = ImageEnhance.Brightness(img).enhance(1.15)
-        img = ImageEnhance.Sharpness(img).enhance(1.05)
-
+    img = ImageEnhance.Color(img).enhance(1.1)
+    img = ImageEnhance.Contrast(img).enhance(1.1)
+    img = ImageEnhance.Brightness(img).enhance(1.05)
+    img = ImageEnhance.Sharpness(img).enhance(1.05)
     img.thumbnail((max_size, max_size), Image.LANCZOS)
     return img
+
+# -------------------------------
+# OpenCV Enhancement Function (Pro MLS)
+# -------------------------------
+def enhance_image_opencv(pil_img, max_size=2048):
+    # Convert PIL → OpenCV (RGB → BGR)
+    img = np.array(pil_img)[:, :, ::-1]
+
+    # Resize first (preserve MLS-friendly size)
+    h, w = img.shape[:2]
+    scale = max(h, w) / max_size
+    if scale > 1:
+        img = cv2.resize(img, (int(w/scale), int(h/scale)), interpolation=cv2.INTER_AREA)
+
+    # White balance & contrast (CLAHE)
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    l = clahe.apply(l)
+    lab = cv2.merge((l, a, b))
+    result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # Gamma correction (exposure boost)
+    gamma = 1.1
+    invGamma = 1.0 / gamma
+    table = np.array([(i / 255.0) ** invGamma * 255 for i in np.arange(256)]).astype("uint8")
+    result = cv2.LUT(result, table)
+
+    # Convert back to PIL (BGR → RGB)
+    result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+    return Image.fromarray(result_rgb)
 
 # -------------------------------
 # Device Detection Helper
 # -------------------------------
 def is_mobile():
     try:
-        # Simple user agent detection fallback
         user_agent = st.session_state.get("_user_agent", "")
         if not user_agent:
             user_agent = st.query_params.get("ua", [""])[0]
@@ -107,10 +129,10 @@ with col1:
     # Processing style toggle
     style = st.radio(
         "Choose processing style:",
-        ["Safe (Light Touch)", "Pro MLS (Brighter & Punchier)"],
+        ["Safe (Light Touch - Pillow)", "Pro MLS (OpenCV Enhanced)"],
         index=1
     )
-    style_key = "safe" if style.startswith("Safe") else "pro"
+    use_opencv = style.startswith("Pro MLS")
 
     # Manual override for download mode
     override_mode = st.radio(
@@ -138,7 +160,10 @@ with col1:
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for i, file in enumerate(uploaded_files, start=1):
                     original_img = Image.open(file)
-                    enhanced_img = enhance_image(original_img, style=style_key)
+                    if use_opencv:
+                        enhanced_img = enhance_image_opencv(original_img)
+                    else:
+                        enhanced_img = enhance_image_pillow(original_img)
 
                     buf = io.BytesIO()
                     enhanced_img.save(buf, format="JPEG", quality=90)
@@ -182,15 +207,16 @@ with col1:
             # Downloads
             if mobile_mode:
                 st.subheader("📱 Download Individual Photos")
-                for i, img_bytes, _, _ in output_images:
+                for i, img_bytes, _, enhanced_img in output_images:
                     st.download_button(
                         label=f"Download Photo {i}",
                         data=img_bytes,
                         file_name=f"{i:02}.jpg",
                         mime="image/jpeg",
                     )
+                    st.image(enhanced_img, caption=f"Photo {i} (tap and hold to save)", use_column_width=True)
                 st.markdown(
-                    "<p style='color:gray; font-size:14px;'>💡 Tip: Tap a photo button above and then select <b>Save to Camera Roll</b> on your phone.</p>",
+                    "<p style='color:gray; font-size:14px;'>💡 Tip: Tap and hold an image above to <b>Save to Photos</b> on your phone.</p>",
                     unsafe_allow_html=True
                 )
             else:
