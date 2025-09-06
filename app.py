@@ -2,6 +2,7 @@ import streamlit as st
 from PIL import Image, ImageEnhance, ImageOps
 import io, zipfile
 from datetime import datetime
+from streamlit_image_comparison import image_comparison  # 👈 new import
 
 # -------------------------------
 # Page Config
@@ -11,13 +12,23 @@ st.set_page_config(page_title="MLS Photo Enhancer", page_icon="📸", layout="wi
 # -------------------------------
 # Image Enhancement Function
 # -------------------------------
-def enhance_image(img, max_size=2048):
+def enhance_image(img, style="safe", max_size=2048):
     img = img.convert("RGB")
     img = ImageOps.autocontrast(img, cutoff=1)
-    img = ImageEnhance.Color(img).enhance(1.2)
-    img = ImageEnhance.Contrast(img).enhance(1.15)
-    img = ImageEnhance.Brightness(img).enhance(1.1)
-    img = ImageEnhance.Sharpness(img).enhance(1.1)
+
+    if style == "safe":
+        # Light touch
+        img = ImageEnhance.Color(img).enhance(1.1)
+        img = ImageEnhance.Contrast(img).enhance(1.1)
+        img = ImageEnhance.Brightness(img).enhance(1.05)
+        img = ImageEnhance.Sharpness(img).enhance(1.05)
+    else:
+        # Pro MLS: brighter, punchier
+        img = ImageEnhance.Color(img).enhance(1.15)
+        img = ImageEnhance.Contrast(img).enhance(1.15)
+        img = ImageEnhance.Brightness(img).enhance(1.15)
+        img = ImageEnhance.Sharpness(img).enhance(1.05)
+
     img.thumbnail((max_size, max_size), Image.LANCZOS)
     return img
 
@@ -92,6 +103,14 @@ with col1:
         st.error("❌ You can only upload up to 15 images per session. Please remove some and try again.")
         uploaded_files = []
 
+    # Processing style toggle
+    style = st.radio(
+        "Choose processing style:",
+        ["Safe (Light Touch)", "Pro MLS (Brighter & Punchier)"],
+        index=1
+    )
+    style_key = "safe" if style.startswith("Safe") else "pro"
+
     # Process Uploaded Files
     if uploaded_files:
         plan = st.session_state.plan
@@ -110,18 +129,18 @@ with col1:
 
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for i, file in enumerate(uploaded_files, start=1):
-                    img = Image.open(file)
-                    enhanced = enhance_image(img)
+                    original_img = Image.open(file)
+                    enhanced_img = enhance_image(original_img, style=style_key)
 
                     buf = io.BytesIO()
-                    enhanced.save(buf, format="JPEG", quality=90)
+                    enhanced_img.save(buf, format="JPEG", quality=90)
                     img_bytes = buf.getvalue()
 
                     # Add to ZIP
                     zipf.writestr(f"{i:02}.jpg", img_bytes)
 
-                    # Store for individual downloads
-                    output_images.append((i, img_bytes))
+                    # Store for downloads + preview
+                    output_images.append((i, img_bytes, original_img, enhanced_img))
 
                     # Update progress bar
                     progress.progress(i / len(uploaded_files))
@@ -131,12 +150,23 @@ with col1:
             progress.empty()
             status_text.empty()
 
-            st.success("✅ Photos enhanced successfully!")
+            st.success(f"✅ Photos enhanced successfully using {style} mode!")
+
+            # Show Before/After slider for the FIRST image only
+            first_original = output_images[0][2]
+            first_enhanced = output_images[0][3]
+            st.subheader("👀 Before / After Preview (First Image)")
+            image_comparison(
+                img1=first_original,
+                img2=first_enhanced,
+                label1="Before",
+                label2="After"
+            )
 
             # Auto-detect device and show appropriate download option
             if is_mobile():
                 st.subheader("📱 Download Individual Photos")
-                for i, img_bytes in output_images:
+                for i, img_bytes, _, _ in output_images:
                     st.download_button(
                         label=f"Download Photo {i}",
                         data=img_bytes,
