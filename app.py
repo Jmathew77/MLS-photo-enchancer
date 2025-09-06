@@ -28,7 +28,6 @@ def is_mobile():
     try:
         user_agent = st.session_state.get("_user_agent", "")
         if not user_agent:
-            # Use new API instead of deprecated one
             user_agent = st.query_params.get("ua", [""])[0]
             st.session_state["_user_agent"] = user_agent.lower()
         ua = st.session_state["_user_agent"]
@@ -83,8 +82,15 @@ col1, col2 = st.columns([2, 1])
 with col1:
     # File uploader
     uploaded_files = st.file_uploader(
-        "Upload your photos", type=["jpg", "jpeg", "png"], accept_multiple_files=True
+        "Upload your photos (max 15 per session)",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True
     )
+
+    # Enforce 15 image limit
+    if uploaded_files and len(uploaded_files) > 15:
+        st.error("❌ You can only upload up to 15 images per session. Please remove some and try again.")
+        uploaded_files = []
 
     # Process Uploaded Files
     if uploaded_files:
@@ -97,6 +103,11 @@ with col1:
         else:
             output_images = []
             zip_buffer = io.BytesIO()
+
+            # Progress bar
+            progress = st.progress(0)
+            status_text = st.empty()
+
             with zipfile.ZipFile(zip_buffer, "w") as zipf:
                 for i, file in enumerate(uploaded_files, start=1):
                     img = Image.open(file)
@@ -112,17 +123,18 @@ with col1:
                     # Store for individual downloads
                     output_images.append((i, img_bytes))
 
+                    # Update progress bar
+                    progress.progress(i / len(uploaded_files))
+                    status_text.text(f"Processing image {i} of {len(uploaded_files)}...")
+
+            # Clear progress after done
+            progress.empty()
+            status_text.empty()
+
             st.success("✅ Photos enhanced successfully!")
 
-            # Auto-detect + manual override
-            default_mode = "Individual Photos" if is_mobile() else "ZIP"
-            download_mode = st.radio(
-                "Choose download option:",
-                ["ZIP", "Individual Photos"],
-                index=0 if default_mode == "ZIP" else 1
-            )
-
-            if download_mode == "Individual Photos":
+            # Auto-detect device and show appropriate download option
+            if is_mobile():
                 st.subheader("📱 Download Individual Photos")
                 for i, img_bytes in output_images:
                     st.download_button(
@@ -131,12 +143,22 @@ with col1:
                         file_name=f"{i:02}.jpg",
                         mime="image/jpeg",
                     )
+                # Mobile hint
+                st.markdown(
+                    "<p style='color:gray; font-size:14px;'>💡 Tip: Tap a photo button above and then select <b>Save to Camera Roll</b> on your phone.</p>",
+                    unsafe_allow_html=True
+                )
             else:
                 st.download_button(
                     label="📦 Download All (MLS_Photos.zip)",
                     data=zip_buffer.getvalue(),
                     file_name="MLS_Photos.zip",
                     mime="application/zip",
+                )
+                # Desktop hint
+                st.markdown(
+                    "<p style='color:gray; font-size:14px;'>💡 Tip: Works best on desktop for downloading large batches of photos as a single ZIP file.</p>",
+                    unsafe_allow_html=True
                 )
 
             # Deduct credits
