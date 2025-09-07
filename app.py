@@ -31,28 +31,47 @@ def enhance_image_opencv(pil_img, max_size=2048):
     # Convert PIL → OpenCV (RGB → BGR)
     img = np.array(pil_img)[:, :, ::-1]
 
-    # Resize first (preserve MLS-friendly size)
+    # Resize first (keep MLS-friendly size)
     h, w = img.shape[:2]
     scale = max(h, w) / max_size
     if scale > 1:
         img = cv2.resize(img, (int(w/scale), int(h/scale)), interpolation=cv2.INTER_AREA)
 
-    # White balance & contrast (CLAHE)
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
-    l = clahe.apply(l)
-    lab = cv2.merge((l, a, b))
-    result = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    # Brightness check
+    avg_brightness = np.mean(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
 
-    # Gamma correction (exposure boost)
-    gamma = 1.1
+    # Apply CLAHE only if dark (interior)
+    if avg_brightness < 100:
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(l)
+        lab = cv2.merge((l, a, b))
+        img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # Adaptive gamma correction
+    gamma = 1.2 if avg_brightness < 100 else 1.05
     invGamma = 1.0 / gamma
     table = np.array([(i / 255.0) ** invGamma * 255 for i in np.arange(256)]).astype("uint8")
-    result = cv2.LUT(result, table)
+    img = cv2.LUT(img, table)
+
+    # White balance correction
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    a = cv2.subtract(a, np.mean(a) - 128)
+    b = cv2.subtract(b, np.mean(b) - 128)
+    lab = cv2.merge((l,a,b))
+    img = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    # Boost saturation slightly
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype("float32")
+    h, s, v = cv2.split(hsv)
+    s = np.clip(s * 1.1, 0, 255)  # +10%
+    hsv = cv2.merge([h, s, v])
+    img = cv2.cvtColor(hsv.astype("uint8"), cv2.COLOR_HSV2BGR)
 
     # Convert back to PIL (BGR → RGB)
-    result_rgb = cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+    result_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return Image.fromarray(result_rgb)
 
 # -------------------------------
